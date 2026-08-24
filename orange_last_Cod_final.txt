@@ -1,0 +1,159 @@
+.data
+
+# -------- Sensors --------
+temp_sensor:      .word 55         # Temperature sensor value (integer)
+smoke_sensor:     .word 600         # Smoke sensor value (integer)
+flame_sensor:     .word 0           # Flame sensor (1 = Yes, 0 = No)
+
+# -------- Thresholds --------
+temp_thr:         .word 45          # Temperature threshold
+smoke_thr:        .word 500         # Smoke threshold
+
+# -------- GPS Coordinates (example integers in microdegrees) --------
+gps_lat:          .word 12971600    # Latitude 12.9716° stored as 12.9716*1e6
+gps_long:         .word 77594600    # Longitude 77.5946° stored as 77.5946*1e6
+
+# -------- Messages --------
+fire_msg:         .string "FIRE DETECTED!\n"          # Fire alert message
+contact_msg:      .string "Call Fire Dept: 101\n"    # Fire dept contact
+owner_msg:        .string "Owner Contact: +91-9876543210\n" # Owner contact
+normal_msg:       .string "SYSTEM NORMAL\n"          # Normal system message
+temp_msg:         .string "Temperature: "            # Label for temp print
+smoke_msg:        .string "Smoke: "                  # Label for smoke print
+flame_msg:        .string "Flame: "                  # Label for flame print
+lat_msg:          .string "Latitude: "               # Label for latitude print
+long_msg:         .string "Longitude: "              # Label for longitude print
+yes_str:          .string "Yes\n"                    # Flame = 1
+no_str:           .string "No\n"                     # Flame = 0
+
+.text
+.globl main
+
+main:
+    # -------- Load Sensor Values --------
+    la t0, temp_sensor     # Load address of temp_sensor into t0
+    lw t1, 0(t0)           # Load temp_sensor value into t1
+
+    la t0, smoke_sensor
+    lw t2, 0(t0)           # Load smoke_sensor value into t2
+
+    la t0, flame_sensor
+    lw t3, 0(t0)           # Load flame_sensor value into t3
+
+    # -------- Load Thresholds --------
+    la t0, temp_thr
+    lw t4, 0(t0)           # Load temperature threshold into t4
+
+    la t0, smoke_thr
+    lw t5, 0(t0)           # Load smoke threshold into t5
+
+# -------- FIRE LOGIC (2+ conditions) --------
+    blt t4, t1, TEMP_HIGH  # If temp > threshold, branch to TEMP_HIGH
+    j CHECK_FLAME           # Else, check flame combination
+
+TEMP_HIGH:
+    blt t5, t2, FIRE        # If smoke > threshold → FIRE
+    j CHECK_FLAME            # Else check flame
+
+CHECK_FLAME:
+    bne t3, x0, FLAME_COMBO # If flame sensor != 0 → check combination
+    j NORMAL                 # Else system is normal
+
+FLAME_COMBO:
+    blt t4, t1, FIRE         # Flame + temp > threshold → FIRE
+    blt t5, t2, FIRE         # Flame + smoke > threshold → FIRE
+    j NORMAL                 # Flame alone → SYSTEM NORMAL
+
+# -------- NORMAL MODE --------
+NORMAL:
+    la a0, normal_msg        # Load string address
+    li a7, 4                 # ecall code 4 → print string
+    ecall
+    j END                    # End program
+
+# -------- FIRE ALERT MODE --------
+FIRE:
+    la a0, fire_msg
+    li a7, 4                 # ecall 4 → print string
+    ecall
+
+    # Print Temperature
+    la a0, temp_msg
+    li a7, 4
+    ecall
+    mv a0, t1                # Move temperature value to a0
+    li a7, 1                 # ecall 1 → print integer
+    ecall
+    li a0, 10
+    li a7, 11                # ecall 11 → newline
+    ecall
+
+    # Print Smoke
+    la a0, smoke_msg
+    li a7, 4
+    ecall
+    mv a0, t2
+    li a7, 1
+    ecall
+    li a0, 10
+    li a7, 11
+    ecall
+
+    # Print Flame
+    la a0, flame_msg
+    li a7, 4
+    ecall
+    bne t3, x0, FLAME_YES    # If flame = 1
+    la a0, no_str             # Else print "No"
+    li a7, 4
+    ecall
+    j FLAME_END
+
+FLAME_YES:
+    la a0, yes_str            # Print "Yes" if flame = 1
+    li a7, 4
+    ecall
+
+FLAME_END:
+
+    # -------- Print GPS Coordinates --------
+    la t0, gps_lat
+    lw a0, 0(t0)             # Load latitude into a0
+    la t1, lat_msg
+    mv a0, a0
+    la a0, lat_msg
+    li a7, 4                 # Print label
+    ecall
+    la t0, gps_lat
+    lw a0, 0(t0)             # Print latitude value
+    li a7, 1
+    ecall
+    li a0, 10
+    li a7, 11                # Newline
+    ecall
+
+    la t0, gps_long
+    lw a0, 0(t0)             # Load longitude into a0
+    la a0, long_msg
+    li a7, 4                 # Print label
+    ecall
+    la t0, gps_long
+    lw a0, 0(t0)             # Print longitude value
+    li a7, 1
+    ecall
+    li a0, 10
+    li a7, 11                # Newline
+    ecall
+
+    # Print Contact Info
+    la a0, contact_msg
+    li a7, 4
+    ecall
+    la a0, owner_msg
+    li a7, 4
+    ecall
+
+# -------- END PROGRAM --------
+END:
+    li a7, 10                 # ecall 10 → exit
+    ecall
